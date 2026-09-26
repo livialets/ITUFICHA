@@ -12,7 +12,6 @@ st.set_page_config(
 
 # Leitura segura de segredos em formato TOML (Streamlit Secrets Management)
 app_title = st.secrets.get("app_title", "Triagem ITU - Teleconsulta Médica")
-clinic_phone = st.secrets.get("doctor_settings", {}).get("clinic_phone", "+55 11 99999-9999")
 medical_source = st.secrets.get("medical_guidelines", {}).get(
     "source", "Consenso SBI / FEBRASGO / SBU / SBPC/ML (2020)"
 )
@@ -27,11 +26,12 @@ anti_self_medication_notice = st.secrets.get(
 st.title(f"🩺 {app_title}")
 st.caption(f"Diretrizes Oficiais: {medical_source}")
 
-# Alerta Obrigatório Anti-Automedicação
-st.error(
-    f"⚠️ **ATENÇÃO AO PACIENTE:** {anti_self_medication_notice}\n\n"
-    "Este aplicativo organiza os sintomas para o **médico avaliar durante a teleconsulta**. "
-    "**NÃO use este formulário para se automedicar.** Somente um médico pode prescrever antibióticos."
+# Alerta de Finalidade e Anti-Automedicação
+st.warning(
+    f"⚠️ **ATENÇÃO:** {anti_self_medication_notice}\n\n"
+    "Este formulário é uma ferramenta de triagem pré-consulta para **auxiliar a anamnese do seu médico**. "
+    "Ele **NÃO emite diagnósticos definitivos** e o paciente **NÃO deve se automedicar**. "
+    "A conduta, o diagnóstico e a prescrição cabem exclusivamente ao médico assistente."
 )
 
 st.markdown("---")
@@ -50,53 +50,82 @@ with col2:
         is_pregnant = st.checkbox("Está grávida atualmente?")
         if is_pregnant:
             gestational_weeks = st.number_input("Idade Gestacional (em semanas)", min_value=1, max_value=42, value=20)
-            if gestational_weeks >= 37:
-                st.warning("⚠️ Atenção médica: Nitrofurantoína é contraindicada após a 37ª semana de gestação.")
 
-recurrent_6m = st.number_input("Quantos episódios de infecção urinária teve nos últimos 6 meses?", min_value=0, max_value=20, value=0)
+# Histórico: Alternância entre 6 Meses e 1 Ano
+recurrent_period = st.radio(
+    "Período para contar episódios anteriores:",
+    ["Últimos 6 meses", "Último 1 ano (12 meses)"],
+    horizontal=True
+)
+
+if recurrent_period == "Últimos 6 meses":
+    recurrent_count = st.number_input("Episódios de infecção urinária nos últimos 6 meses:", min_value=0, max_value=20, value=0)
+    is_recurrent_criteria = recurrent_count >= 2
+else:
+    recurrent_count = st.number_input("Episódios de infecção urinária no último 1 ano (12 meses):", min_value=0, max_value=20, value=0)
+    is_recurrent_criteria = recurrent_count >= 3
+
 symptom_days = st.number_input("Há quantos dias começaram os sintomas?", min_value=1, max_value=60, value=2)
 
 st.markdown("---")
 
-# 2. Sintomas Urinários Baixos
+# 2. Sintomas Urinários Baixos (Descrições completas em linhas quebradas, sem cortar com "...")
 st.subheader("2. Sintomas Urinários Sentidos (Linguagem Acessível)")
-st.info("Marque o que está sentindo no momento:")
+st.info("Marque o que está sentindo no momento (as descrições estão completas para facilitar a sua compreensão):")
 
-c1, c2 = st.columns(2)
-with c1:
-    dysuria = st.checkbox("🔥 Disúria: Dor, ardor ou queimação ao urinar (parece 'vidro moído' ou corte)")
-    pollakiuria = st.checkbox("🔄 Polaciúria: Vontade de urinar muitas vezes em pouca quantidade")
-    urgency = st.checkbox("⚡ Urgência: Vontade súbita e incontrolável com medo de escapes")
-with c2:
-    hematuria = st.checkbox("🩸 Hematúria: Presença de sangue visível na urina (rosada ou tom de refrigerante)")
-    suprapubic_pain = st.checkbox("🛡️ Dor Suprapúbica: Dor, peso ou incômodo no 'pé da barriga'")
-    nocturia = st.checkbox("🌙 Noctúria: Acordar duas ou mais vezes à noite para urinar")
-
-urine_odor = st.checkbox("🫧 Urina com odor forte ou turva isoladamente (sem dor ao urinar)")
+dysuria = st.checkbox(
+    "🔥 Dor ou ardor ao urinar (Disúria)\nSensação de corte, queimação forte ou sensação de 'vidro moído' ao fazer xixi."
+)
+pollakiuria = st.checkbox(
+    "🔄 Vontade de ir ao banheiro a todo momento (Polaciúria)\nNecessidade de urinar muitas vezes ao longo do dia, saindo apenas poucas gotinhas."
+)
+urgency = st.checkbox(
+    "⚡ Vontade súbita e incontrolável (Urgência)\nSensação repentina e urgente de que não vai conseguir segurar a urina a tempo."
+)
+hematuria = st.checkbox(
+    "🩸 Sangue visível na urina (Hematúria)\nUrina avermelhada, tom rosado ou cor de refrigerante escuro."
+)
+suprapubic_pain = st.checkbox(
+    "🛡️ Dor, peso ou cólica no 'pé da barriga' (Dor suprapúbica)\nDesconforto ou sensação de bexiga pesada na região baixa do ventre."
+)
+nocturia = st.checkbox(
+    "🌙 Acordar várias vezes à noite para urinar (Noctúria)\nInterrupção do sono duas ou mais vezes especificamente para esvaziar a bexiga."
+)
+urine_odor = st.checkbox(
+    "🫧 Urina com odor forte ou turva isoladamente (sem dor ou ardor ao urinar)\nNota: alterações isoladas de cor e cheiro não são critérios de infecção urinária ativa."
+)
 
 st.markdown("---")
 
-# 3. Sinais de Alarme (Pielonefrite)
-st.subheader("3. Sinais de Alarme (Infecção Renal / Sistêmica)")
-st.caption("Avisam se a bactéria pode ter atingido os rins:")
+# 3. Sinais de Alerta Geral / Sintomas Sistêmicos
+st.subheader("3. Sintomas Sistêmicos / Alerta Clínico")
+st.caption("Assinale se houver febre ou dores no corpo para que o médico investigue na consulta:")
 
-a1, a2 = st.columns(2)
-with a1:
-    fever = st.checkbox("🌡️ Febre medida (temperatura acima de 37,8°C)")
-    chills = st.checkbox("❄️ Calafrios profundos e dentes batendo")
-with a2:
-    flank_pain = st.checkbox("⚡ Dor forte nas costas na altura dos rins (lombar/flancos)")
-    nausea = st.checkbox("🤢 Náuseas ou vômitos que impedem a ingestão de remédios")
+fever = st.checkbox(
+    "🌡️ Febre medida no termômetro (temperatura superior a 37,8°C)\nCorpo muito quente com necessidade de antitérmico."
+)
+chills = st.checkbox(
+    "❄️ Calafrios e tremores musculares\nSensação de frio intenso e dentes batendo mesmo debaixo de cobertas."
+)
+flank_pain = st.checkbox(
+    "⚡ Dor forte nas costas na altura dos rins (lombar ou flancos)\nDor profunda nas costas que não melhora mudando de posição."
+)
+nausea = st.checkbox(
+    "🤢 Náuseas ou vômitos\nDificuldade de reter água ou alimentos no estômago."
+)
 
 st.markdown("---")
 
 # 4. Investigação Ginecológica Diferencial
-st.subheader("4. Sintomas Ginecológicos (Diagnóstico Diferencial)")
-g1, g2 = st.columns(2)
-with g1:
-    vaginal_discharge = st.checkbox("⚪ Corrimento vaginal anormal (nata de leite, amarelado ou com odor)")
-with g2:
-    vaginal_itching = st.checkbox("🛡️ Coceira ou ardor na vulva/região externa")
+st.subheader("4. Sintomas Ginecológicos (Auxílio Diferencial)")
+st.caption("A presença de queixas íntimas ajuda o médico a diferenciar infecções vaginais de urinárias:")
+
+vaginal_discharge = st.checkbox(
+    "⚪ Corrimento vaginal anormal\nPresença de secreção atípica esbranquiçada (nata de leite), amarelada ou com odor."
+)
+vaginal_itching = st.checkbox(
+    "🛡️ Coceira ou ardor na região íntima externa (vulva)\nCoceira na pele externa genital ou queimação ao contato com a água."
+)
 
 st.markdown("---")
 
@@ -117,107 +146,120 @@ if uploaded_files:
 
 st.markdown("---")
 
-# Botão de Classificação e Geração de Texto para o Médico
-if st.button("🩺 Classificar e Gerar Relatório de Texto para o Médico", type="primary"):
+# Botão de Triagem e Geração de Texto para o Médico
+if st.button("🩺 Gerar Relatório de Triagem para a Consulta Médica", type="primary"):
     has_alarm = fever or chills or flank_pain or nausea
     has_classic = dysuria or pollakiuria or urgency or suprapubic_pain or hematuria
 
-    if has_alarm:
-        level = "URGÊNCIA MÉDICA"
-        prob = 95
-        title = "Suspeita de Pielonefrite Aguda (Infecção Renal)"
-        summary = "Presença de sintomas de alarme sistêmico. Risco de bacteremia e lesão renal."
+    # REGRA: Se o paciente não marcar nenhum sintoma clássico, apenas os de alarme, NÃO sugerir pielonefrite!
+    if has_alarm and not has_classic:
+        level = "TRIAGEM CLÍNICA"
+        title = "Relatório Pré-Consulta: Sintomas Gerais sem Sintomas Urinários Baixos"
+        summary = "Foram assinalados sintomas sistêmicos (como febre, calafrios ou dor lombar), porém SEM queixas urinárias clássicas (ardência ao urinar ou polaciúria). O médico investigará outras causas sistêmicas durante a teleconsulta."
         recommendations = [
-            "Encaminhamento imediato a Pronto-Socorro presencial.",
-            "Urocultura com Antibiograma obrigatória antes de qualquer antibiótico.",
-            "Coleta de exames de sangue (hemograma e creatinina)."
+            "Avaliação médica presencial ou detalhada por teleconsulta.",
+            "Não iniciar antibióticos de infecção urinária por conta própria.",
+            "O médico assistente investigará diagnósticos gerais (virais, musculares ou respiratórios)."
+        ]
+    elif has_alarm and has_classic:
+        level = "PRIORIDADE CLÍNICA"
+        title = "Relatório Pré-Consulta: Sintomas Urinários com Manifestação Sistêmica"
+        summary = "Presença de sintomas urinários associados a queixas sistêmicas (febre, calafrios ou dor lombar). Dados compilados para a avaliação rápida do médico."
+        recommendations = [
+            "Encaminhamento para avaliação pelo médico assistente.",
+            "O médico avaliará a indicação de Urocultura com Antibiograma.",
+            "Proibida a automedicação. Somente o médico pode prescrever a conduta."
         ]
     elif is_pregnant and has_classic:
         level = "PRIORIDADE OBSTÉTRICA"
-        prob = 88
-        title = "Suspeita de Cistite Aguda na Gestação"
-        summary = "Gestante com sintomas urinários. Necessita de prescrição médica de drogas categoria B."
+        title = "Relatório Pré-Consulta: Gestante com Sintomas Urinários"
+        summary = "Paciente gestante com queixas miccionais relatadas. Relatório pronto para a conduta do obstetra."
         recommendations = [
             "Consulta obstétrica prioritária.",
-            "Urocultura com TSA mandatória antes de iniciar antibióticos.",
-            "Cultura de controle 1-2 semanas após fim do tratamento.",
-            "Contraindicadas Fluoroquinolonas (Ciprofloxacino)."
+            "O médico avaliará solicitação de Urocultura.",
+            "Somente o médico obstetra pode prescrever medicações seguras na gestação."
         ]
     elif vaginal_discharge and not hematuria:
-        level = "DIAGNÓSTICO DIFERENCIAL"
-        prob = 40
-        title = "Provável Afecção Ginecológica / Vulvovaginite"
-        summary = "A presença de corrimento vaginal diminui a probabilidade de ITU para < 50%."
+        level = "TRIAGEM DIFERENCIAL"
+        title = "Relatório Pré-Consulta: Presença de Queixas Ginecológicas"
+        summary = "Presença de corrimento vaginal assinalada. Auxilia o médico a investigar causas ginecológicas antes de considerar medicação urinária."
         recommendations = [
-            "Avaliação ginecológica para exame especular.",
-            "Não iniciar antibióticos para urina sem exame de urina ou avaliação.",
-            "Tratar provável candidíase ou vaginose com o médico."
+            "Avaliação médica para verificar afecções ginecológicas.",
+            "Não tomar antibióticos de farmácia sem prescrição médica."
+        ]
+    elif is_recurrent_criteria and has_classic:
+        level = "HISTÓRICO FREQUENTE"
+        title = "Relatório Pré-Consulta: Histórico de Sintomas Recorrentes"
+        summary = "Paciente com sintomas atuais e critério preenchido de episódios prévios. Dados prontos para a avaliação médica."
+        recommendations = [
+            "Avaliação de exames complementares a critério médico.",
+            "O médico avaliará opções de prevenção e conduta individualizada."
         ]
     elif has_classic:
-        level = "ALTA PROBABILIDADE (>90%)"
-        prob = 92
-        title = "Quadro Típico de Cistite Aguda Não Complicada"
-        summary = "Apresentação clínica clássica de infecção restrita à bexiga."
+        level = "SUMÁRIO PRÉ-CONSULTA"
+        title = "Relatório Pré-Consulta: Sintomas Urinários Baixos"
+        summary = "Sintomas miccionais relatados e estruturados para otimizar o tempo da anamnese com seu médico."
         recommendations = [
-            "Prescrição médica de 1ª linha (Fosfomicina trometamol 3g dose única OU Nitrofurantoína 100mg 6/6h por 5 dias).",
-            "NÃO usar Fluoroquinolonas (Ciprofloxacino) por risco de lesão de tendões (FQAD) e resistência.",
-            "Hidratação abundante (2 a 3 litros de água por dia)."
+            "Apresentar este relatório durante a teleconsulta com o médico.",
+            "Não se automedicar. O médico quem indicará a conduta adequada.",
+            "Manter boa hidratação com ingestão de água."
         ]
     else:
         level = "BAIXA PROBABILIDADE"
-        prob = 15
-        title = "Ausência de Sintomas Típicos de ITU Ativa"
-        summary = "Odor forte ou urina turva isolados NÃO fecham diagnóstico de infecção bacteriana."
+        title = "Relatório Pré-Consulta: Sem Queixas Típicas Ativas"
+        summary = "Não foram assinalados sintomas clássicos de infecção urinária ativa."
         recommendations = [
-            "Aumentar a ingestão de água.",
-            "Não tomar antibióticos (Diretriz: Don't screen, don't treat)."
+            "Aumentar o consumo de água ao longo do dia.",
+            "Consultar o médico se surgirem sintomas de ardência ou dor ao urinar."
         ]
 
-    st.subheader(f"Resultado da Classificação: {level}")
-    st.markdown(f"**Diagnóstico Provável:** {title} *(Probabilidade estimada: ~{prob}%)*")
-    st.write(summary)
+    # Exibe Relatório em Tela sem rótulos diagnósticos alarmistas
+    st.subheader(f"📋 {title}")
+    st.caption(f"Status da Triagem: {level} • Instrumento para o Médico")
+    st.info(f"**Finalidade do Relatório:** {summary}")
 
-    st.markdown("#### Recomendações Clínicas para o Médico:")
+    st.markdown("#### Orientações para a sua Consulta:")
     for r in recommendations:
         st.markdown(f"- {r}")
 
     current_time = datetime.datetime.now().strftime("%d/%m/%Y %H:%M")
     report_text = f"""======================================================================
-RELATÓRIO CLÍNICO DE TRIAGEM DE ITU (TELECONSULTA)
-*** INSTRUMENTO EXCLUSIVO DE AUXÍLIO MÉDICO - NÃO SE AUTOMEDIQUE ***
+RELATÓRIO PRÉ-CONSULTA DE TRIAGEM (TELEMEDICINA)
+*** INSTRUMENTO EXCLUSIVO DE APOIO AO MÉDICO - NÃO SE AUTOMEDIQUE ***
 Data: {current_time}
-Referência: Consenso SBI / FEBRASGO / SBU / SBPC/ML 2020
+Referência de Diretriz: Consenso SBI / FEBRASGO / SBU / SBPC/ML
 ======================================================================
 
 1. DADOS DA PACIENTE:
 • Nome: {patient_name or 'Não informada'} | Idade: {age} anos | Sexo: {gender}
 • Gestante: {'SIM (' + str(gestational_weeks) + ' semanas)' if is_pregnant else 'NÃO'}
-• Episódios nos últimos 6 meses: {recurrent_6m}
-• Duração dos sintomas: {symptom_days} dia(s)
+• Histórico ({recurrent_period}): {recurrent_count} episódio(s)
+• Início dos sintomas: há {symptom_days} dia(s)
 
-2. SINTOMAS DECLARADOS:
-• Disúria (ardor/queimação ao urinar): {'SIM' if dysuria else 'NÃO'}
+2. SINTOMAS RELATADOS PELO PACIENTE:
+• Disúria (dor/ardor ao urinar): {'SIM' if dysuria else 'NÃO'}
 • Polaciúria (ir urinar muitas vezes em poucas gotas): {'SIM' if pollakiuria else 'NÃO'}
 • Urgência miccional: {'SIM' if urgency else 'NÃO'}
 • Hematúria (sangue visível): {'SIM' if hematuria else 'NÃO'}
 • Dor suprapúbica (pé da barriga): {'SIM' if suprapubic_pain else 'NÃO'}
-• Febre / Calafrios: {'SIM' if (fever or chills) else 'NÃO'}
-• Dor lombar (rins): {'SIM' if flank_pain else 'NÃO'}
-• Corrimento vaginal: {'SIM' if vaginal_discharge else 'NÃO'}
+• Febre: {'SIM' if fever else 'NÃO'} | Calafrios: {'SIM' if chills else 'NÃO'}
+• Dor lombar/costas: {'SIM' if flank_pain else 'NÃO'}
+• Náuseas/vômitos: {'SIM' if nausea else 'NÃO'}
+• Corrimento vaginal: {'SIM' if vaginal_discharge else 'NÃO'} | Coceira vulvar: {'SIM' if vaginal_itching else 'NÃO'}
 
-3. CLASSIFICAÇÃO CLÍNICA AUTOMÁTICA:
-• Classificação: {level}
-• Hipótese: {title} (~{prob}%)
-• Resumo: {summary}
+3. SUMÁRIO ESTRUTURADO PARA O MÉDICO:
+• Classificação da Triagem: {level}
+• Sumário Clínico: {title}
+• Resumo para a Anamnese: {summary}
 
-4. EXAMES ANEXADOS: {len(uploaded_files) if uploaded_files else 0} arquivo(s)
+4. EXAMES RECENTES ANEXADOS: {len(uploaded_files) if uploaded_files else 0} arquivo(s)
 
-5. CONDUTAS BASEADAS NAS DIRETRIZES:
+5. OBSERVAÇÕES PARA A CONDUTA MÉDICA:
 {chr(10).join(['• ' + r for r in recommendations])}
 
 AVISO CFM / ANVISA:
-Este documento destina-se exclusivamente ao médico para consulta remota ou presencial.
-Proibida a automedicação ou compra de antimicrobianos sem receita médica.
+Este documento destina-se exclusivamente a auxiliar o médico durante a anamnese.
+O diagnóstico definitivo e a conduta terapêutica cabem única e privativamente ao médico.
 ======================================================================"""
 
     st.markdown("---")
@@ -225,7 +267,7 @@ Proibida a automedicação ou compra de antimicrobianos sem receita médica.
     st.download_button(
         label="📥 Baixar Relatório em Texto (.txt)",
         data=report_text,
-        file_name=f"relatorio_itu_{(patient_name or 'paciente').replace(' ', '_').lower()}.txt",
+        file_name=f"relatorio_triagem_{(patient_name or 'paciente').replace(' ', '_').lower()}.txt",
         mime="text/plain"
     )
 
